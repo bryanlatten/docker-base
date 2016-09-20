@@ -5,6 +5,7 @@
 
 SUPERVISOR_CONF=/etc/supervisor/conf.d/worker.conf
 SERVICES_D=/etc/services.d
+NOT_ROOT_USER=root
 
 # Signal to init processes to avoid any webserver startup
 export CONTAINER_ROLE='worker'
@@ -43,19 +44,27 @@ fi
 
 echo "[worker] command: '${WORKER_COMMAND}' quantity: ${WORKER_QUANTITY}"
 
-for i in `seq 1 $WORKER_QUANTITY`;
-do
-  SERVICE_FOLDER="${SERVICES_D}/worker-${i}"
-  mkdir $SERVICE_FOLDER
-  echo "\
+buildCommand() {
+
+  # Convert service into a safe folder name
+  FOLDER_NAME=${2//[^[:alnum:]-_]/}
+
+  for i in `seq 1 $1`;
+  do
+    SERVICE_FOLDER="${SERVICES_D}/${FOLDER_NAME}-${i}"
+    mkdir $SERVICE_FOLDER
+    echo "\
 #!/usr/bin/execlineb -P
 
-with-contenv
-s6-setuidgid ${NOT_ROOT_USER}
-${WORKER_COMMAND}" > "${SERVICE_FOLDER}/run"
-done
+with-contenv \
+s6-setuidgid ${NOT_ROOT_USER} \
+$2" > "${SERVICE_FOLDER}/run"
+  done
+
+} # buildCommand
+
+buildCommand $WORKER_QUANTITY $WORKER_COMMAND;
 
 # Start process manager
 echo "[run] starting process manager"
 exec /init
-
